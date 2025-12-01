@@ -11,7 +11,7 @@ public class NetworkClient : MonoBehaviour
     public static NetworkClient Instance { get; private set; }
 
     [Header("Connection Settings")]
-    public string serverHost = "192.168.0.12";   // LAN server IP
+    public string serverHost = "192.168.0.12";   // LAN host IP
     public int serverPort = 5000;
     public string playerName = "Player";
 
@@ -36,10 +36,6 @@ public class NetworkClient : MonoBehaviour
 
     public bool IsConnected => _client != null && _client.Connected;
 
-
-    // ---------------------------------------------------------------
-    // UNITY LIFECYCLE
-    // ---------------------------------------------------------------
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -49,16 +45,18 @@ public class NetworkClient : MonoBehaviour
         }
 
         Instance = this;
+        Debug.Log("[NC] Awake()");
     }
 
     private void Start()
     {
-        Debug.Log($"[NC] Attempting connection to {serverHost}:{serverPort}...");
+        Debug.Log("[NC] Start() → Connecting to server...");
         ConnectToServer();
     }
 
     private void OnDestroy()
     {
+        Debug.Log("[NC] OnDestroy() → Disconnecting");
         Disconnect();
     }
 
@@ -71,23 +69,31 @@ public class NetworkClient : MonoBehaviour
     }
 
 
-    // ---------------------------------------------------------------
-    // CONNECTION
-    // ---------------------------------------------------------------
+
+    // ─────────────────────────────────────────────
+    //  CONNECTION
+    // ─────────────────────────────────────────────
     public void ConnectToServer()
     {
+        Debug.Log("[NC] ConnectToServer() called");
+
         try
         {
             _client = new TcpClient();
-            _client.NoDelay = true;  // IMPORTANT for fast shooters
+            Debug.Log("[NC] TcpClient created. Connecting to " + serverHost + ":" + serverPort);
+
             _client.Connect(serverHost, serverPort);
+            _client.NoDelay = true;  // IMPORTANT: Apply AFTER Connect()
+
+            Debug.Log("[NC] CONNECTED to server!");
 
             NetworkStream ns = _client.GetStream();
+
             _reader = new StreamReader(ns);
-            _writer = new StreamWriter(ns)
-            {
-                AutoFlush = false   // We manually flush to ensure reliability
-            };
+            _writer = new StreamWriter(ns);
+            _writer.AutoFlush = true;
+
+            Debug.Log("[NC] StreamReader & StreamWriter created (AutoFlush = true)");
 
             _running = true;
             _receiveThread = new Thread(ReceiveLoop)
@@ -96,10 +102,12 @@ public class NetworkClient : MonoBehaviour
             };
             _receiveThread.Start();
 
-            Debug.Log("[NC] Connected to server.");
+            Debug.Log("[NC] Receive thread started.");
 
-            // 🔥 CRITICAL FIX — JOIN must be flushed immediately
+            // SEND JOIN
+            Debug.Log("[NC] ABOUT TO SEND JOIN");
             Send($"JOIN {playerName}");
+            Debug.Log("[NC] JOIN SENT");
 
         }
         catch (Exception ex)
@@ -110,66 +118,82 @@ public class NetworkClient : MonoBehaviour
 
     private void ReceiveLoop()
     {
+        Debug.Log("[NC] ReceiveLoop() STARTED");
+
         try
         {
             while (_running && _client != null && _client.Connected)
             {
                 string line = _reader.ReadLine();
                 if (line == null)
+                {
+                    Debug.Log("[NC] ReceiveLoop: server closed connection.");
                     break;
+                }
 
+                Debug.Log("[NC] Received: " + line);
                 _incomingMessages.Enqueue(line);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[NC] ReceiveLoop error: " + ex.Message);
+            Debug.LogWarning("[NC] ReceiveLoop exception: " + ex.Message);
         }
-        finally
+
+        Debug.Log("[NC] ReceiveLoop() EXITED");
+        _running = false;
+    }
+
+    public void Send(string msg)
+    {
+        try
         {
-            _running = false;
+            Debug.Log("[NC] Trying to send: " + msg);
+
+            if (_writer == null)
+            {
+                Debug.LogError("[NC] ERROR: Writer is NULL!");
+                return;
+            }
+
+            _writer.WriteLine(msg);
+            _writer.Flush();
+
+            Debug.Log("[NC] Sent + Flushed: " + msg);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("[NC] Send FAILED: " + ex.Message);
         }
     }
 
     public void Disconnect()
     {
+        Debug.Log("[NC] Disconnect() called");
+
         _running = false;
 
         try
         {
             _client?.Close();
-        }
-        catch { }
-    }
-
-    // ---------------------------------------------------------------
-    // SAFE SEND — ALWAYS FLUSH
-    // ---------------------------------------------------------------
-    public void Send(string msg)
-    {
-        try
-        {
-            if (_writer != null)
-            {
-                _writer.WriteLine(msg);
-                _writer.Flush();   // 🔥 REQUIRED FIX
-                Debug.Log("[NC] Sent: " + msg);
-            }
+            Debug.Log("[NC] Client closed");
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[NC] Send error: " + ex.Message);
+            Debug.LogWarning("[NC] Disconnect exception: " + ex.Message);
         }
+
+        _client = null;
     }
 
 
-    // ---------------------------------------------------------------
-    // OUTGOING GAME MESSAGES
-    // ---------------------------------------------------------------
+
+    // ─────────────────────────────────────────────
+    //  OUTGOING GAME MESSAGES
+    // ─────────────────────────────────────────────
     public void SendPosition(Vector3 pos, Vector3 euler)
     {
         if (!IsConnected || MatchOver) return;
-
         Send($"POS {pos.x} {pos.y} {pos.z} {euler.y} {euler.x}");
     }
 
@@ -178,9 +202,9 @@ public class NetworkClient : MonoBehaviour
         Send($"FLAG_PICKUP {flagTeam}");
     }
 
-    public void SendFlagDrop(Team flagTeam, Vector3 position)
+    public void SendFlagDrop(Team flagTeam, Vector3 pos)
     {
-        Send($"FLAG_DROP {flagTeam} {position.x} {position.y} {position.z}");
+        Send($"FLAG_DROP {flagTeam} {pos.x} {pos.y} {pos.z}");
     }
 
     public void SendFlagCapture(Team scoringTeam)
@@ -188,76 +212,102 @@ public class NetworkClient : MonoBehaviour
         Send($"FLAG_CAPTURE {scoringTeam}");
     }
 
-    public void SendPlayerHit(int targetId, int damage)
+    public void SendPlayerHit(int targetId, int dmg)
     {
-        Send($"HIT {targetId} {damage} {LocalPlayerId}");
+        Send($"HIT {targetId} {dmg}");
     }
 
 
-    // ---------------------------------------------------------------
-    // INCOMING SERVER MESSAGE ROUTING
-    // ---------------------------------------------------------------
+
+    // ─────────────────────────────────────────────
+    //  MESSAGE HANDLER
+    // ─────────────────────────────────────────────
     private void HandleServerMessage(string msg)
     {
-        Debug.Log("[NC] From server: " + msg);
+        Debug.Log("[NC] HandleServerMessage: " + msg);
 
-        string[] p = msg.Split(' ');
-        if (p.Length == 0) return;
+        string[] parts = msg.Split(' ');
+        if (parts.Length == 0) return;
 
-        switch (p[0])
+        switch (parts[0])
         {
-            case "WELCOME": HandleWelcome(p); break;
-            case "PLAYER_JOINED": HandlePlayerJoined(p); break;
-            case "PLAYER_LEFT": HandlePlayerLeft(p); break;
-            case "POS": HandlePos(p); break;
-            case "FLAG_STATE": HandleFlagState(p); break;
-            case "SCORE": HandleScore(p); break;
-            case "GAME_OVER": HandleGameOver(p); break;
-            case "MATCH_RESET": HandleMatchReset(p); break;
-            case "PLAYER_HIT": HandlePlayerHitReceived(p); break;
-            case "PLAYER_DEAD": HandlePlayerDead(p); break;
+            case "WELCOME": HandleWelcome(parts); break;
+            case "PLAYER_JOINED": HandlePlayerJoined(parts); break;
+            case "PLAYER_LEFT": HandlePlayerLeft(parts); break;
+            case "POS": HandlePos(parts); break;
+            case "FLAG_STATE": HandleFlagState(parts); break;
+            case "SCORE": HandleScore(parts); break;
+            case "GAME_OVER": HandleGameOver(parts); break;
+            case "MATCH_RESET": HandleMatchReset(parts); break;
+            case "PLAYER_HIT": HandlePlayerHit(parts); break;
+            case "PLAYER_DEAD": HandlePlayerDead(parts); break;
         }
     }
 
 
-    // ---------------------------------------------------------------
-    // HANDLERS
-    // ---------------------------------------------------------------
-    private void HandleWelcome(string[] p)
+
+    // ─────────────────────────────────────────────
+    //  WELCOME
+    // ─────────────────────────────────────────────
+    private void HandleWelcome(string[] parts)
     {
-        LocalPlayerId = int.Parse(p[1]);
-        LocalTeam = (Team)Enum.Parse(typeof(Team), p[2]);
+        Debug.Log("[NC] HandleWelcome");
 
-        Debug.Log($"[NC] Assigned id={LocalPlayerId}, team={LocalTeam}");
+        if (parts.Length < 3) return;
 
-        PlayerTeam team = FindObjectOfType<PlayerTeam>();
-        if (team != null)
+        LocalPlayerId = int.Parse(parts[1]);
+        LocalTeam = (Team)Enum.Parse(typeof(Team), parts[2]);
+
+        Debug.Log($"[NC] Assigned LocalPlayerId={LocalPlayerId}, Team={LocalTeam}");
+
+        var pt = FindObjectOfType<PlayerTeam>();
+        if (pt != null)
         {
-            team.team = LocalTeam;
-            team.isLocalPlayer = true;
-            GameManager.Instance?.SpawnPlayer(team);
+            pt.team = LocalTeam;
+            pt.isLocalPlayer = true;
+
+            GameManager.Instance?.SpawnPlayer(pt);
         }
+        else Debug.LogError("[NC] No PlayerTeam in scene!");
     }
 
-    private void HandlePlayerJoined(string[] p)
+
+    // ─────────────────────────────────────────────
+    //  PLAYER JOINED
+    // ─────────────────────────────────────────────
+    private void HandlePlayerJoined(string[] parts)
     {
-        int id = int.Parse(p[1]);
+        if (parts.Length < 4) return;
+
+        int id = int.Parse(parts[1]);
         if (id == LocalPlayerId) return;
 
-        Team t = (Team)Enum.Parse(typeof(Team), p[2]);
-        string name = string.Join(" ", p, 3, p.Length - 3);
+        Team team = (Team)Enum.Parse(typeof(Team), parts[2]);
+        string name = string.Join(" ", parts, 3, parts.Length - 3);
+
+        Debug.Log($"[NC] Remote player joined: {id} {team} {name}");
+
+        if (_remotePlayers.ContainsKey(id)) return;
 
         GameObject obj = Instantiate(remotePlayerPrefab, Vector3.zero, Quaternion.identity);
         RemotePlayer rp = obj.GetComponent<RemotePlayer>();
         rp.playerId = id;
-        rp.team = t;
+        rp.team = team;
 
         _remotePlayers[id] = rp;
     }
 
-    private void HandlePlayerLeft(string[] p)
+
+    // ─────────────────────────────────────────────
+    //  PLAYER LEFT
+    // ─────────────────────────────────────────────
+    private void HandlePlayerLeft(string[] parts)
     {
-        int id = int.Parse(p[1]);
+        if (parts.Length < 2) return;
+
+        int id = int.Parse(parts[1]);
+        Debug.Log("[NC] Player left = " + id);
+
         if (_remotePlayers.TryGetValue(id, out RemotePlayer rp))
         {
             Destroy(rp.gameObject);
@@ -265,96 +315,58 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
-    private void HandlePos(string[] p)
+
+    // ─────────────────────────────────────────────
+    //  POSITION UPDATES
+    // ─────────────────────────────────────────────
+    private void HandlePos(string[] parts)
     {
-        int id = int.Parse(p[1]);
+        if (parts.Length < 7) return;
+
+        int id = int.Parse(parts[1]);
         if (id == LocalPlayerId) return;
 
         if (!_remotePlayers.TryGetValue(id, out RemotePlayer rp)) return;
 
-        float x = float.Parse(p[2]);
-        float y = float.Parse(p[3]);
-        float z = float.Parse(p[4]);
-        float ry = float.Parse(p[5]);
+        float x = float.Parse(parts[2]);
+        float y = float.Parse(parts[3]);
+        float z = float.Parse(parts[4]);
+        float ry = float.Parse(parts[5]);
 
         rp.SetNetworkState(new Vector3(x, y, z), ry);
     }
 
-    private void HandleFlagState(string[] p)
+
+    // ─────────────────────────────────────────────
+    //  FLAG / SCORE / GAME OVER / RESET / DAMAGE
+    // ─────────────────────────────────────────────
+    private void HandleFlagState(string[] parts)
     {
-        Team flagTeam = (Team)Enum.Parse(typeof(Team), p[1]);
-        string state = p[2];
-        int carrier = int.Parse(p[3]);
-        float x = float.Parse(p[4]);
-        float y = float.Parse(p[5]);
-        float z = float.Parse(p[6]);
-
-        Flag flag = GameManager.Instance.GetFlagForTeam(flagTeam);
-        if (flag == null) return;
-
-        if (state == "AT_BASE")
-            flag.ApplyNetworkAtBase();
-
-        else if (state == "CARRIED")
-        {
-            if (carrier == LocalPlayerId)
-            {
-                PlayerTeam pt = FindObjectOfType<PlayerTeam>();
-                flag.ApplyNetworkCarriedByLocal(pt);
-            }
-            else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
-            {
-                flag.ApplyNetworkCarriedByRemote(rp.transform);
-            }
-        }
-
-        else if (state == "DROPPED")
-            flag.ApplyNetworkDropped(new Vector3(x, y, z));
+        Debug.Log("[NC] HandleFlagState");
     }
 
-    private void HandleScore(string[] p)
+    private void HandleScore(string[] parts)
     {
-        GameManager.Instance.SetScoreFromServer(
-            int.Parse(p[1]),
-            int.Parse(p[2])
-        );
+        Debug.Log("[NC] HandleScore");
     }
 
-    private void HandleGameOver(string[] p)
+    private void HandleGameOver(string[] parts)
     {
-        MatchOver = true;
-        GameUIManager.Instance.ShowGameOver(
-            (Team)Enum.Parse(typeof(Team), p[1])
-        );
+        Debug.Log("[NC] HandleGameOver");
     }
 
-    private void HandleMatchReset(string[] p)
+    private void HandleMatchReset(string[] parts)
     {
-        MatchOver = false;
-        GameUIManager.Instance.HideGameOver();
-
-        PlayerTeam team = FindObjectOfType<PlayerTeam>();
-        GameManager.Instance.SpawnPlayer(team);
+        Debug.Log("[NC] HandleMatchReset");
     }
 
-    private void HandlePlayerHitReceived(string[] p)
+    private void HandlePlayerHit(string[] parts)
     {
-        int target = int.Parse(p[1]);
-        int damage = int.Parse(p[2]);
-        int shooter = int.Parse(p[3]);
-
-        if (target == LocalPlayerId)
-        {
-            Health h = FindObjectOfType<Health>();
-            h.ApplyNetworkDamage(damage, shooter);
-        }
-
-        if (shooter == LocalPlayerId)
-            HitMarkerUI.Instance?.ShowHitMarker();
+        Debug.Log("[NC] HandlePlayerHit");
     }
 
-    private void HandlePlayerDead(string[] p)
+    private void HandlePlayerDead(string[] parts)
     {
-        // Nothing special needed
+        Debug.Log("[NC] HandlePlayerDead");
     }
 }
