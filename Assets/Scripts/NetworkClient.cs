@@ -88,6 +88,8 @@ public class NetworkClient : MonoBehaviour
 
         while (true)
         {
+            bool connectionFailed = false;
+
             try
             {
                 Debug.Log($"[NC] Attempting connect to {serverHost}:{serverPort} ...");
@@ -112,13 +114,16 @@ public class NetworkClient : MonoBehaviour
                 Debug.Log("[NC] Connected! Sending JOIN...");
                 Send($"JOIN {playerName}");
 
-                yield break; // connected successfully
+                yield break; // SUCCESS — exit coroutine
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[NC] Connect failed: {ex.Message}. Retrying in 1 sec...");
-                yield return new WaitForSeconds(1f);
+                Debug.LogWarning($"[NC] Connect failed: {ex.Message}");
+                connectionFailed = true;
             }
+
+            if (connectionFailed)
+                yield return new WaitForSeconds(1f);
         }
     }
 
@@ -290,7 +295,7 @@ public class NetworkClient : MonoBehaviour
 
         Debug.Log($"[NC] Assigned LocalPlayerId={LocalPlayerId}, Team={LocalTeam}");
 
-        var playerTeam = FindObjectOfType<PlayerTeam>();
+        var playerTeam = FindFirstObjectByType<PlayerTeam>();
         if (playerTeam != null)
         {
             playerTeam.team = LocalTeam;
@@ -369,7 +374,7 @@ public class NetworkClient : MonoBehaviour
             case "CARRIED":
                 if (carrierId == LocalPlayerId)
                 {
-                    flag.ApplyNetworkCarriedByLocal(FindObjectOfType<PlayerTeam>());
+                    flag.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
                 }
                 else if (_remotePlayers.TryGetValue(carrierId, out RemotePlayer rp))
                 {
@@ -404,7 +409,7 @@ public class NetworkClient : MonoBehaviour
         MatchOver = false;
         GameUIManager.Instance?.HideGameOver();
 
-        PlayerTeam playerTeam = FindObjectOfType<PlayerTeam>();
+        PlayerTeam playerTeam = FindFirstObjectByType<PlayerTeam>();
         if (playerTeam != null)
             GameManager.Instance?.SpawnPlayer(playerTeam);
     }
@@ -417,7 +422,7 @@ public class NetworkClient : MonoBehaviour
 
         if (targetId == LocalPlayerId)
         {
-            FindObjectOfType<Health>()?.ApplyNetworkDamage(damage, shooterId);
+            FindFirstObjectByType<Health>()?.ApplyNetworkDamage(damage, shooterId);
         }
 
         if (shooterId == LocalPlayerId)
