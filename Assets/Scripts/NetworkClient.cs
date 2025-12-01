@@ -11,7 +11,7 @@ public class NetworkClient : MonoBehaviour
     public static NetworkClient Instance { get; private set; }
 
     [Header("Connection Settings")]
-    public string serverHost = "127.0.0.1";
+    public string serverHost = "192.168.0.12";
     public int serverPort = 5000;
     public string playerName = "Player";
 
@@ -29,7 +29,8 @@ public class NetworkClient : MonoBehaviour
     public bool MatchOver { get; private set; } = false;
 
     [Header("Local Player Reference")]
-    public PlayerTeam localPlayerTeam;   // ← assign in Inspector
+    // Assign your local Player (the one with PlayerTeam) here in the Inspector
+    public PlayerTeam localPlayerTeam;
 
     [Header("Remote Players")]
     public GameObject remotePlayerPrefab;
@@ -72,7 +73,7 @@ public class NetworkClient : MonoBehaviour
         try
         {
             _client = new TcpClient();
-            _client.NoDelay = true; // small improvement for responsiveness
+            _client.NoDelay = true; // disable Nagle for snappier updates
             _client.Connect(serverHost, serverPort);
 
             NetworkStream ns = _client.GetStream();
@@ -277,8 +278,8 @@ public class NetworkClient : MonoBehaviour
         float ry = float.Parse(parts[5]);
         // float pitch = float.Parse(parts[6]); // ignored for now
 
-        rp.transform.position = new Vector3(x, y, z);
-        rp.transform.rotation = Quaternion.Euler(0, ry, 0);
+        // Use smoothing on the RemotePlayer
+        rp.SetNetworkTransform(new Vector3(x, y, z), ry);
     }
 
     private void HandleFlagState(string[] parts)

@@ -1,57 +1,78 @@
 using UnityEngine;
 
-[DisallowMultipleComponent]
-[RequireComponent(typeof(CharacterController))]
 public class PlayerTeam : MonoBehaviour
 {
-    [Header("Team Settings")]
-    public Team team = Team.Red;   // will be overridden by NetworkClient on WELCOME
+    public Team team;
+    public bool isLocalPlayer;
 
-    [Header("Flag Carry")]
-    public Transform flagHoldPoint;   // assign in Inspector
-    [HideInInspector] public Flag carriedFlag;
+    [Header("Movement Components")]
+    public CharacterController characterController;
+    public PlayerMovementAdvanced movement;
 
-    public bool HasFlag => carriedFlag != null;
-
-    [Header("Local / Remote")]
-    public bool isLocalPlayer = true; // true for the player you control
-
-    private CharacterController controller;
+    [Header("Flag Carrying")]
+    public Transform flagHoldPoint;   // where the flag should attach
+    public Flag carriedFlag;          // current flag (if any)
 
     private void Awake()
     {
-        controller = GetComponent<CharacterController>();
+        if (characterController == null)
+            characterController = GetComponent<CharacterController>();
+
+        if (movement == null)
+            movement = GetComponent<PlayerMovementAdvanced>();
     }
 
-    private void Start()
+    /// <summary>
+    /// Teleport the player to a spawn Transform (position + rotation).
+    /// Handles CharacterController safely.
+    /// </summary>
+    public void TeleportTo(Transform spawn)
     {
-        // Spawn handled after NetworkClient gets WELCOME and sets team
-    }
-
-    public void TeleportTo(Transform target)
-    {
-        if (target == null)
+        if (spawn == null)
         {
-            Debug.LogError("PlayerTeam.TeleportTo called with null target.");
+            Debug.LogError("TeleportTo called with null spawn.");
             return;
         }
 
-        if (controller != null)
-            controller.enabled = false;
+        Debug.Log($"[PlayerTeam] TeleportTo: team={team}, targetPos={spawn.position}");
 
-        transform.SetPositionAndRotation(target.position, target.rotation);
+        bool ccWasEnabled = characterController != null && characterController.enabled;
+        if (characterController != null)
+            characterController.enabled = false;
 
-        if (controller != null)
-            controller.enabled = true;
+        // FULL position and rotation
+        transform.position = spawn.position;
+        transform.rotation = spawn.rotation;
+
+        // If you ever add a vertical-velocity reset in movement, call it here.
+        // if (movement != null) movement.ResetVertical();
+
+        if (characterController != null && ccWasEnabled)
+            characterController.enabled = true;
     }
 
+    // -------------------------
+    // CTF helpers – shaped to match Flag/CaptureZone usage
+    // -------------------------
+
+    // CaptureZone uses:  if (!player.HasFlag) ...
+    public bool HasFlag => carriedFlag != null;
+
+    // Flag / CaptureZone use:  player.AssignFlag(flag);
     public void AssignFlag(Flag flag)
     {
         carriedFlag = flag;
     }
 
+    // Flag uses: player.ClearFlag();  AND player.ClearFlag(flag);
+    public void ClearFlag()
+    {
+        carriedFlag = null;
+    }
+
     public void ClearFlag(Flag flag)
     {
+        // Only clear if this is the flag we were actually carrying
         if (carriedFlag == flag)
             carriedFlag = null;
     }
