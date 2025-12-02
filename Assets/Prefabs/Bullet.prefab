@@ -155,6 +155,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb78845ed3656d24ca4158177ee55de6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NewMonoBehaviourScript
+  shooterId: -1
+  damage: 25
+  lifeTime: 3
+  redTrail: {fileID: 2100000, guid: ae605c6be625c044a9077ebb04c37624, type: 2}
+  blueTrail: {fileID: 2100000, guid: dbbb26bc5b3d46349b84f80f0518aeb3, type: 2}
+  shooterTeam: 0
+  impactEffect: {fileID: 7338225629317567199, guid: d78550beeea58de4785542277f537ac9, type: 3}
+  trailLifetimeAfterHit: 200
 --- !u!96 &-1153138569677969493
 TrailRenderer:
   serializedVersion: 3
@@ -203,7 +211,7 @@ TrailRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Time: 0.7
+  m_Time: 3
   m_PreviewTimeScale: 1
   m_Parameters:
     serializedVersion: 3
@@ -213,7 +221,7 @@ TrailRenderer:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.14529991
+        value: 1
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -221,8 +229,8 @@ TrailRenderer:
         inWeight: 0.33333334
         outWeight: 0.33333334
       - serializedVersion: 3
-        time: 0.09448852
-        value: 0.1111145
+        time: 0.7237228
+        value: 0.10294151
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -236,13 +244,13 @@ TrailRenderer:
       serializedVersion: 2
       key0: {r: 1, g: 0, b: 0, a: 1}
       key1: {r: 1, g: 1, b: 1, a: 1}
-      key2: {r: 0, g: 0, b: 0, a: 0}
+      key2: {r: 0, g: 0, b: 0, a: 1}
       key3: {r: 0, g: 0, b: 0, a: 0}
       key4: {r: 0, g: 0, b: 0, a: 0}
       key5: {r: 0, g: 0, b: 0, a: 0}
       key6: {r: 0, g: 0, b: 0, a: 0}
       key7: {r: 0, g: 0, b: 0, a: 0}
-      ctime0: 26214
+      ctime0: 25250
       ctime1: 65535
       ctime2: 0
       ctime3: 0
@@ -252,13 +260,13 @@ TrailRenderer:
       ctime7: 0
       atime0: 0
       atime1: 65535
-      atime2: 0
+      atime2: 65535
       atime3: 0
       atime4: 0
       atime5: 0
       atime6: 0
       atime7: 0
-      m_Mode: 0
+      m_Mode: 2
       m_ColorSpace: 0
       m_NumColorKeys: 2
       m_NumAlphaKeys: 2
