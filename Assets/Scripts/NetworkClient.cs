@@ -12,7 +12,7 @@ public class NetworkClient : MonoBehaviour
     public static NetworkClient Instance { get; private set; }
 
     [Header("Connection Settings")]
-    public string serverHost = "192.168.0.12";   // LAN host IP (IP at Tosh's place)
+    public string serverHost = "192.168.0.12";   // LAN host IP (IP at Tosh's place) -- change as needed for testing
     public int serverPort = 5000;
     public string playerName = "Player";
 
