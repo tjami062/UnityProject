@@ -10811,7 +10811,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 457cad71b2fa6a04a862227d843b7bf8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkClient
-  serverHost: 127.0.0.1
+  serverHost: 192.168.0.12
   serverPort: 5000
   playerName: 'Player '
   remotePlayerPrefab: {fileID: 1567040862749875820, guid: fbbed203ac9caa345a9712bce3553358, type: 3}
