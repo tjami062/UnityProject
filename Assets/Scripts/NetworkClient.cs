@@ -12,7 +12,7 @@ public class NetworkClient : MonoBehaviour
     public static NetworkClient Instance { get; private set; }
 
     [Header("Connection Settings")]
-    public string serverHost = "192.168.0.12";   // LAN host IP
+    public string serverHost = "192.168.0.12";   // LAN host IP (IP at Tosh's place)
     public int serverPort = 5000;
     public string playerName = "Player";
 
@@ -44,6 +44,7 @@ public class NetworkClient : MonoBehaviour
 
     private void Awake()
     {
+        // ensures this behaves like a singleton
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -56,17 +57,20 @@ public class NetworkClient : MonoBehaviour
 
     private void Start()
     {
+        // attempts to establish a connection when the game starts
         Debug.Log("[NC] Starting connection...");
         ConnectToServer();
     }
 
     private void OnDestroy()
     {
+        // disconnects when the object is destroyed
         Disconnect();
     }
 
     private void Update()
     {
+        // processes incoming messages from the server
         while (_incomingMessages.TryDequeue(out string msg))
         {
             HandleServerMessage(msg);
@@ -82,6 +86,7 @@ public class NetworkClient : MonoBehaviour
         StartCoroutine(ConnectRoutine());
     }
 
+    // attempts to connect to the server and retries every second if it fails
     private IEnumerator ConnectRoutine()
     {
         Debug.Log("[NC] Starting ConnectRoutine...");
@@ -127,6 +132,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // runs on a background thread to receive messages from the server
     private void ReceiveLoop()
     {
         Debug.Log("[NC] ReceiveLoop started");
@@ -155,6 +161,7 @@ public class NetworkClient : MonoBehaviour
         _running = false;
     }
 
+    // sends a text message to the server over TCP
     public void Send(string msg)
     {
         try
@@ -175,6 +182,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // disconnects from the server and stops the receive thread
     public void Disconnect()
     {
         Debug.Log("[NC] Disconnecting...");
@@ -194,30 +202,35 @@ public class NetworkClient : MonoBehaviour
     // Outgoing gameplay messages
     // ============================================================
 
+    // sends the player's position and rotation to the server
     public void SendPosition(Vector3 pos, Vector3 euler)
     {
         if (!IsConnected || MatchOver) return;
         Send($"POS {pos.x} {pos.y} {pos.z} {euler.y} {euler.x}");
     }
 
+    // notifies the server that the player has picked up a flag
     public void SendFlagPickup(Team flagTeam)
     {
         if (!IsConnected) return;
         Send($"FLAG_PICKUP {flagTeam}");
     }
 
+    // notifies the server that the player has dropped a flag at a specific position
     public void SendFlagDrop(Team flagTeam, Vector3 position)
     {
         if (!IsConnected) return;
         Send($"FLAG_DROP {flagTeam} {position.x} {position.y} {position.z}");
     }
 
+    // notifies the server that a flag has been captured by a team
     public void SendFlagCapture(Team scoringTeam)
     {
         if (!IsConnected) return;
         Send($"FLAG_CAPTURE {scoringTeam}");
     }
 
+    // notifies the server that the player has hit (shoots) another player
     public void SendPlayerHit(int targetId, int damage, int shooterId)
     {
         if (!IsConnected) return;
@@ -228,6 +241,7 @@ public class NetworkClient : MonoBehaviour
     // Incoming message handling
     // ============================================================
 
+    // processes a message received from the server and routes it to the appropriate handler
     private void HandleServerMessage(string msg)
     {
         Debug.Log("[NC] ← From server: " + msg);
@@ -287,6 +301,7 @@ public class NetworkClient : MonoBehaviour
     // Message Handlers
     // ============================================================
 
+    // server tells the client its player ID and team
     private void HandleWelcome(string[] parts)
     {
         // WELCOME <playerId> <team>
@@ -305,6 +320,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // server notifies that a new player has joined and creates a RemotePlayer for them
     private void HandlePlayerJoined(string[] parts)
     {
         int id = int.Parse(parts[1]);
@@ -326,6 +342,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // server notifies that a player has left and removes their RemotePlayer
     private void HandlePlayerLeft(string[] parts)
     {
         int id = int.Parse(parts[1]);
@@ -337,6 +354,8 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+
+    // server updates the position and rotation of a remote player
     private void HandlePos(string[] parts)
     {
         int id = int.Parse(parts[1]);
@@ -353,6 +372,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // server updates the state of a flag (at base, carried, dropped)
     private void HandleFlagState(string[] parts)
     {
         Team flagTeam = (Team)Enum.Parse(typeof(Team), parts[1]);
@@ -388,6 +408,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // server updates the score for both teams
     private void HandleScore(string[] parts)
     {
         int red = int.Parse(parts[1]);
@@ -396,6 +417,7 @@ public class NetworkClient : MonoBehaviour
         GameManager.Instance?.SetScoreFromServer(red, blue);
     }
 
+    // server notifies that the game is over and which team won
     private void HandleGameOver(string[] parts)
     {
         if (!Enum.TryParse(parts[1], out Team winningTeam)) return;
@@ -404,6 +426,7 @@ public class NetworkClient : MonoBehaviour
         GameUIManager.Instance?.ShowGameOver(winningTeam);
     }
 
+    // server notifies that the match has been reset and respawns the local player
     private void HandleMatchReset(string[] parts)
     {
         MatchOver = false;
@@ -414,6 +437,7 @@ public class NetworkClient : MonoBehaviour
             GameManager.Instance?.SpawnPlayer(playerTeam);
     }
 
+    // server applies damage to a player and shows hit marker if local player was the shooter
     private void HandlePlayerHit(string[] parts)
     {
         int targetId = int.Parse(parts[1]);
@@ -431,6 +455,7 @@ public class NetworkClient : MonoBehaviour
         }
     }
 
+    // server notifies that a player has died
     private void HandlePlayerDead(string[] parts)
     {
         int deadId = int.Parse(parts[1]);
