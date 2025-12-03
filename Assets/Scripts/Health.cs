@@ -57,23 +57,14 @@ public class Health : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // 🔥 If carrying a flag, DROP IT (full fix)
+        // 🔥 IMPORTANT: Drop flag *before* notifying server of death
         if (playerTeam != null && playerTeam.carriedFlag != null)
         {
-            Flag carried = playerTeam.carriedFlag;
-
-            Vector3 dropPos = playerTeam.transform.position;
-
-            // Send correct drop message
-            NetworkClient.Instance.Send(
-                $"FLAG_DROP {carried.team} {dropPos.x} {dropPos.y} {dropPos.z}"
-            );
-
-            // Clear local reference
-            playerTeam.ClearFlag(carried);
+            Debug.Log("[HEALTH] Dropping flag before sending death message...");
+            playerTeam.carriedFlag.NetworkDropFromLocal(playerTeam);
         }
 
-        // inform server of death for kill feed
+        // Inform server that we died (for kill feed etc.)
         if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
         {
             int myId = NetworkClient.Instance.LocalPlayerId;
@@ -81,8 +72,6 @@ public class Health : MonoBehaviour
         }
 
         ShowDeathMessage();
-
-        // Respawn after delay
         StartCoroutine(RespawnAfterDelay(3f));
     }
 
