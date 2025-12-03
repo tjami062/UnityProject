@@ -467,11 +467,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RemotePlayer
   playerId: 0
   team: 0
-  positionLerpSpeed: 15
-  rotationLerpSpeed: 15
+  playerRenderer: {fileID: 8092524225795576833}
   redMaterial: {fileID: 2100000, guid: ce82fe14b72586b4a93269dbca92efcd, type: 2}
   blueMaterial: {fileID: 2100000, guid: dbbb26bc5b3d46349b84f80f0518aeb3, type: 2}
-  playerRenderer: {fileID: 8092524225795576833}
+  positionLerpSpeed: 15
+  rotationLerpSpeed: 15
+  flagHoldPoint: {fileID: 2500250742350996310}
 --- !u!1 &4368322825748927545
 GameObject:
   m_ObjectHideFlags: 0
