@@ -1,62 +1,67 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class RemotePlayer : MonoBehaviour
 {
+    [Header("Identity")]
     public int playerId;
     public Team team;
 
-    [Header("Smoothing")]
+    [Header("Visual")]
+    public Renderer playerRenderer;
+    public Material redMaterial;
+    public Material blueMaterial;
+
+    [Header("Network Movement")]
     public float positionLerpSpeed = 15f;
     public float rotationLerpSpeed = 15f;
 
-    [Header("Team Materials")]
-    public Material redMaterial;
-    public Material blueMaterial;
-    public Renderer playerRenderer;   // drag the body mesh here
+    private Vector3 targetPos;
+    private float targetRotY;
 
-    // network state
-    private Vector3 targetPosition;
-    private float targetYaw;
+    [Header("Flag Attachment")]
+    public Transform flagHoldPoint; // ← Set this in the prefab
 
-    private void Awake()
-    {
-        targetPosition = transform.position;
-        targetYaw = transform.eulerAngles.y;
-    }
+    private Flag carriedFlag;
 
     private void Start()
     {
-        ApplyTeamColor();
-    }
-
-    public void ApplyTeamColor()
-    {
-        if (playerRenderer == null) return;
-
-        playerRenderer.material = (team == Team.Red)
-            ? redMaterial
-            : blueMaterial;
-    }
-
-    // Called by network to update remote player's state
-    public void SetNetworkState(Vector3 pos, float yaw)
-    {
-        targetPosition = pos;
-        targetYaw = yaw;
+        if (playerRenderer != null)
+        {
+            playerRenderer.material = (team == Team.Red) ? redMaterial : blueMaterial;
+        }
     }
 
     private void Update()
     {
-        // position lerp
-        transform.position = Vector3.Lerp(
-            transform.position,
-            targetPosition,
-            Time.deltaTime * positionLerpSpeed
-        );
+        transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * positionLerpSpeed);
 
-        // rotation lerp
-        Vector3 euler = transform.eulerAngles;
-        euler.y = Mathf.LerpAngle(euler.y, targetYaw, Time.deltaTime * rotationLerpSpeed);
-        transform.rotation = Quaternion.Euler(euler);
+        Quaternion targetRot = Quaternion.Euler(0, targetRotY, 0);
+        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * rotationLerpSpeed);
+    }
+
+    public void SetNetworkState(Vector3 pos, float rotY)
+    {
+        targetPos = pos;
+        targetRotY = rotY;
+    }
+
+    // Called by NetworkClient.HandleFlagState()
+    public void AttachCarriedFlag(Flag flag)
+    {
+        carriedFlag = flag;
+
+        Transform attachPoint = flagHoldPoint != null ? flagHoldPoint : transform;
+
+        flag.transform.SetParent(attachPoint, false);
+        flag.transform.localPosition = Vector3.zero;
+        flag.transform.localRotation = Quaternion.identity;
+    }
+
+    public void DropFlag()
+    {
+        if (carriedFlag != null)
+        {
+            carriedFlag = null;
+        }
     }
 }

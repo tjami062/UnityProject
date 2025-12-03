@@ -325,7 +325,7 @@ public class NetworkClient : MonoBehaviour
                 }
                 else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
                 {
-                    f.ApplyNetworkCarriedByRemote(rp.transform);
+                    rp.AttachCarriedFlag(f);
                 }
                 break;
 
