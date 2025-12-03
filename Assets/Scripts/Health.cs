@@ -33,6 +33,9 @@ public class Health : MonoBehaviour
             deathMessageText.gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// Called when server tells us we were hit.
+    /// </summary>
     public void ApplyNetworkDamage(int damage, int attackerId)
     {
         if (isDead) return;
@@ -53,35 +56,36 @@ public class Health : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // --- NEW: Drop flag on death ---
-        var pt = GetComponent<PlayerTeam>();
-        if (pt != null && pt.HasFlag && pt.carriedFlag != null)
-        {
-            Flag flag = pt.carriedFlag;
-            Vector3 dropPos = transform.position;
-
-            // remove reference first
-            pt.ClearFlag();
-
-            // tell server
-            if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
-                NetworkClient.Instance.Send(
-                    $"FLAG_DROP {flag.team} {dropPos.x} {dropPos.y} {dropPos.z}"
-                );
-
-            // update locally
-            flag.ApplyNetworkDropped(dropPos);
-        }
-
-        // Inform server that we died
+        // Inform server of death (killfeed etc)
         if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
         {
             int myId = NetworkClient.Instance.LocalPlayerId;
             NetworkClient.Instance.Send($"PLAYER_DEAD {myId} {lastAttackerId}");
         }
 
+        // -------------------------------
+        // RETURN FLAG TO BASE ON DEATH
+        // -------------------------------
+        if (playerTeam != null && playerTeam.HasFlag && playerTeam.carriedFlag != null)
+        {
+            Flag flag = playerTeam.carriedFlag;
+
+            // Clear flag from player
+            playerTeam.ClearFlag();
+
+            // Tell server: treat this as touching own base → return flag
+            if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
+            {
+                NetworkClient.Instance.Send($"FLAG_PICKUP {flag.team}");
+            }
+
+            // Immediately update client-side visuals
+            flag.ApplyNetworkAtBase();
+        }
+
         ShowDeathMessage();
 
+        // Respawn player
         StartCoroutine(RespawnAfterDelay(3f));
     }
 
@@ -112,7 +116,10 @@ public class Health : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
 
+        // Respawn local player
         if (GameManager.Instance != null && playerTeam != null)
+        {
             GameManager.Instance.SpawnPlayer(playerTeam);
+        }
     }
 }
