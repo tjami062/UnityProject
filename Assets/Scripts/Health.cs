@@ -9,7 +9,7 @@ public class Health : MonoBehaviour
     public int maxHealth = 100;
     private int currentHealth;
 
-    // 🔹 These two properties are what your HealthUI can use
+    // UI reads these
     public int CurrentHealth => currentHealth;
     public int MaxHealth => maxHealth;
 
@@ -57,7 +57,23 @@ public class Health : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // Inform server that we died (for kill feed etc.)
+        // 🔥 If carrying a flag, DROP IT (full fix)
+        if (playerTeam != null && playerTeam.carriedFlag != null)
+        {
+            Flag carried = playerTeam.carriedFlag;
+
+            Vector3 dropPos = playerTeam.transform.position;
+
+            // Send correct drop message
+            NetworkClient.Instance.Send(
+                $"FLAG_DROP {carried.team} {dropPos.x} {dropPos.y} {dropPos.z}"
+            );
+
+            // Clear local reference
+            playerTeam.ClearFlag(carried);
+        }
+
+        // inform server of death for kill feed
         if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
         {
             int myId = NetworkClient.Instance.LocalPlayerId;
@@ -66,7 +82,7 @@ public class Health : MonoBehaviour
 
         ShowDeathMessage();
 
-        // Respawn after a short delay
+        // Respawn after delay
         StartCoroutine(RespawnAfterDelay(3f));
     }
 
@@ -84,9 +100,7 @@ public class Health : MonoBehaviour
     {
         deathMessageText.gameObject.SetActive(true);
         deathMessageText.text = "You Died";
-
         yield return new WaitForSeconds(deathMessageDuration);
-
         deathMessageText.gameObject.SetActive(false);
     }
 
@@ -97,7 +111,7 @@ public class Health : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
 
-        // Respawn local player at their team spawn
+        // Respawn player at team spawn
         if (GameManager.Instance != null && playerTeam != null)
         {
             GameManager.Instance.SpawnPlayer(playerTeam);
