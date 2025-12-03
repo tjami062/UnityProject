@@ -9,7 +9,12 @@ public class RemotePlayer : MonoBehaviour
     public float positionLerpSpeed = 15f;
     public float rotationLerpSpeed = 15f;
 
-    // Target state coming from the network
+    [Header("Team Materials")]
+    public Material redMaterial;
+    public Material blueMaterial;
+    public Renderer playerRenderer;   // drag the body mesh here
+
+    // network state
     private Vector3 targetPosition;
     private float targetYaw;
 
@@ -19,9 +24,21 @@ public class RemotePlayer : MonoBehaviour
         targetYaw = transform.eulerAngles.y;
     }
 
-    /// <summary>
-    /// Called by NetworkClient whenever a POS message is received.
-    /// </summary>
+    private void Start()
+    {
+        ApplyTeamColor();
+    }
+
+    public void ApplyTeamColor()
+    {
+        if (playerRenderer == null) return;
+
+        playerRenderer.material = (team == Team.Red)
+            ? redMaterial
+            : blueMaterial;
+    }
+
+    // Called by network to update remote player's state
     public void SetNetworkState(Vector3 pos, float yaw)
     {
         targetPosition = pos;
@@ -30,14 +47,14 @@ public class RemotePlayer : MonoBehaviour
 
     private void Update()
     {
-        // Smoothly move toward the networked position
+        // position lerp
         transform.position = Vector3.Lerp(
             transform.position,
             targetPosition,
             Time.deltaTime * positionLerpSpeed
         );
 
-        // Smoothly rotate toward the networked yaw
+        // rotation lerp
         Vector3 euler = transform.eulerAngles;
         euler.y = Mathf.LerpAngle(euler.y, targetYaw, Time.deltaTime * rotationLerpSpeed);
         transform.rotation = Quaternion.Euler(euler);

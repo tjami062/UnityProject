@@ -403,7 +403,7 @@ GameObject:
   - component: {fileID: 5989574688326524696}
   - component: {fileID: 8084955065590161632}
   m_Layer: 0
-  m_Name: RemotePlayerPreFab 1
+  m_Name: RemotePlayerPreFab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -469,6 +469,9 @@ MonoBehaviour:
   team: 0
   positionLerpSpeed: 15
   rotationLerpSpeed: 15
+  redMaterial: {fileID: 2100000, guid: ce82fe14b72586b4a93269dbca92efcd, type: 2}
+  blueMaterial: {fileID: 2100000, guid: dbbb26bc5b3d46349b84f80f0518aeb3, type: 2}
+  playerRenderer: {fileID: 8092524225795576833}
 --- !u!1 &4368322825748927545
 GameObject:
   m_ObjectHideFlags: 0
