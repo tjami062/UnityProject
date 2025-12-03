@@ -271,39 +271,41 @@ public class NetworkClient : MonoBehaviour
     {
         Team flagTeam = (Team)Enum.Parse(typeof(Team), p[1]);
         string state = p[2];
-        int carrierId = int.Parse(p[3]);
+        int carrier = int.Parse(p[3]);
 
-        Flag flag = GameManager.Instance.GetFlagForTeam(flagTeam);
+        Flag flag = GameManager.Instance?.GetFlagForTeam(flagTeam);
         if (flag == null) return;
 
-        // AT_BASE (no coordinates)
+        // CASE 1: AT BASE — NEVER read coordinates, never use 0,0,0
         if (state == "AT_BASE")
         {
             flag.ApplyNetworkAtBase();
             return;
         }
 
-        // CARRIED (no coordinates)
+        // CASE 2: CARRIED — ignore coordinates
         if (state == "CARRIED")
         {
-            if (carrierId == LocalPlayerId)
+            if (carrier == LocalPlayerId)
             {
                 flag.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
             }
-            else if (_remotePlayers.TryGetValue(carrierId, out RemotePlayer rp))
+            else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
             {
                 rp.AttachCarriedFlag(flag);
             }
             return;
         }
 
-        // DROPPED (safe because DROPPED always includes x y z)
+        // CASE 3: DROPPED — NOW read coordinates
         if (state == "DROPPED")
         {
             float x = float.Parse(p[4]);
             float y = float.Parse(p[5]);
             float z = float.Parse(p[6]);
+
             flag.ApplyNetworkDropped(new Vector3(x, y, z));
+            return;
         }
     }
 
