@@ -9,7 +9,6 @@ public class Health : MonoBehaviour
     public int maxHealth = 100;
     private int currentHealth;
 
-    // UI reads these
     public int CurrentHealth => currentHealth;
     public int MaxHealth => maxHealth;
 
@@ -34,9 +33,6 @@ public class Health : MonoBehaviour
             deathMessageText.gameObject.SetActive(false);
     }
 
-    /// <summary>
-    /// Called when server tells us we were hit.
-    /// </summary>
     public void ApplyNetworkDamage(int damage, int attackerId)
     {
         if (isDead) return;
@@ -57,14 +53,27 @@ public class Health : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // 🔥 IMPORTANT: Drop flag *before* notifying server of death
-        if (playerTeam != null && playerTeam.carriedFlag != null)
+        // --- NEW: Drop flag on death ---
+        var pt = GetComponent<PlayerTeam>();
+        if (pt != null && pt.HasFlag && pt.carriedFlag != null)
         {
-            Debug.Log("[HEALTH] Dropping flag before sending death message...");
-            playerTeam.carriedFlag.NetworkDropFromLocal(playerTeam);
+            Flag flag = pt.carriedFlag;
+            Vector3 dropPos = transform.position;
+
+            // remove reference first
+            pt.ClearFlag();
+
+            // tell server
+            if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
+                NetworkClient.Instance.Send(
+                    $"FLAG_DROP {flag.team} {dropPos.x} {dropPos.y} {dropPos.z}"
+                );
+
+            // update locally
+            flag.ApplyNetworkDropped(dropPos);
         }
 
-        // Inform server that we died (for kill feed etc.)
+        // Inform server that we died
         if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
         {
             int myId = NetworkClient.Instance.LocalPlayerId;
@@ -72,6 +81,7 @@ public class Health : MonoBehaviour
         }
 
         ShowDeathMessage();
+
         StartCoroutine(RespawnAfterDelay(3f));
     }
 
@@ -89,7 +99,9 @@ public class Health : MonoBehaviour
     {
         deathMessageText.gameObject.SetActive(true);
         deathMessageText.text = "You Died";
+
         yield return new WaitForSeconds(deathMessageDuration);
+
         deathMessageText.gameObject.SetActive(false);
     }
 
@@ -100,10 +112,7 @@ public class Health : MonoBehaviour
         currentHealth = maxHealth;
         isDead = false;
 
-        // Respawn player at team spawn
         if (GameManager.Instance != null && playerTeam != null)
-        {
             GameManager.Instance.SpawnPlayer(playerTeam);
-        }
     }
 }
