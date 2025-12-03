@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class NetworkPositionSender : MonoBehaviour
 {
-    public float sendInterval = 0.05f; // 20 times per second
+    public float sendInterval = 0.05f;
 
     private float _timer;
 
