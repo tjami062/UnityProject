@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [DisallowMultipleComponent]
 public class Flag : MonoBehaviour
@@ -8,9 +8,12 @@ public class Flag : MonoBehaviour
     public Transform homeOverride;   // The actual flag home position in Unity
 
     [Header("Carry Offset (if no hold point on remote)")]
-    public Vector3 fallbackLocalOffset = new Vector3(0, 0, 0.5f);
+    public Vector3 fallbackLocalOffset = new Vector3(0, -0.5f, 1.5f);
 
+    // The real carrier variable (not "currentCarrier")
     private PlayerTeam carrier;
+
+    // Store home transform from editor
     private Vector3 homePos;
     private Quaternion homeRot;
 
@@ -18,7 +21,6 @@ public class Flag : MonoBehaviour
 
     private void Awake()
     {
-        // Use override if assigned
         if (homeOverride != null)
         {
             homePos = homeOverride.position;
@@ -26,44 +28,54 @@ public class Flag : MonoBehaviour
         }
         else
         {
-            // Fallback = current position
+            // Fallback = current placement in scene
             homePos = transform.position;
             homeRot = transform.rotation;
+            Debug.LogWarning($"[FLAG] {team} has NO homeOverride assigned — using scene starting position.");
         }
     }
 
     private void Start()
     {
+        // Ensure flag always starts where it should
         ApplyNetworkAtBase();
     }
 
     // ============================================================
-    // STATE SET FROM SERVER
+    // FLAG GOES HOME (server says AT_BASE)
     // ============================================================
-
     public void ApplyNetworkAtBase()
     {
-        // Ensure no old parenting keeps wrong offset
-        transform.SetParent(null);
+        Debug.Log($"[FLAG] ApplyNetworkAtBase() for {team}");
 
-        // Force home position ALWAYS
-        transform.position = homePos;
-        transform.rotation = homeRot;
-
-        // Ensure no carrier reference stays
+        // Make sure we detach from any player
         if (carrier != null)
         {
             carrier.ClearFlag(this);
             carrier = null;
         }
 
-        // FORCE Y FIX
-        Vector3 p = transform.position;
-        p.y = homePos.y;
-        transform.position = p;
+        transform.SetParent(null);
+
+        if (homeOverride != null)
+        {
+            transform.position = homeOverride.position;
+            transform.rotation = homeOverride.rotation;
+
+            Debug.Log($"[FLAG] {team} flag moved HOME → {homeOverride.position}");
+        }
+        else
+        {
+            // Only used for safety — you should always have a homeOverride!
+            Debug.LogError($"[FLAG] No homeOverride assigned for {team}! Using fallback.");
+            transform.position = homePos;
+            transform.rotation = homeRot;
+        }
     }
 
-
+    // ============================================================
+    // FLAG DROPPED (server sends DROPPED x y z)
+    // ============================================================
     public void ApplyNetworkDropped(Vector3 pos)
     {
         if (carrier != null)
@@ -74,8 +86,14 @@ public class Flag : MonoBehaviour
 
         transform.SetParent(null);
         transform.position = pos;
+        transform.localRotation = Quaternion.identity;
+
+        Debug.Log($"[FLAG] Dropped at {pos}");
     }
 
+    // ============================================================
+    // CARRIED BY LOCAL PLAYER
+    // ============================================================
     public void ApplyNetworkCarriedByLocal(PlayerTeam player)
     {
         carrier = player;
@@ -92,8 +110,13 @@ public class Flag : MonoBehaviour
             : fallbackLocalOffset;
 
         transform.localRotation = Quaternion.identity;
+
+        Debug.Log($"[FLAG] Local player now carrying {team} flag");
     }
 
+    // ============================================================
+    // CARRIED BY REMOTE PLAYER
+    // ============================================================
     public void ApplyNetworkCarriedByRemote(Transform remoteHoldPoint)
     {
         if (carrier != null)
@@ -105,12 +128,13 @@ public class Flag : MonoBehaviour
         transform.SetParent(remoteHoldPoint, false);
         transform.localPosition = Vector3.zero;
         transform.localRotation = Quaternion.identity;
+
+        Debug.Log($"[FLAG] Remote player carrying {team} flag");
     }
 
     // ============================================================
-    // LOCAL PICKUP
+    // LOCAL PICKUP — only triggers for LOCAL player
     // ============================================================
-
     private void OnTriggerEnter(Collider other)
     {
         PlayerTeam player = other.GetComponentInParent<PlayerTeam>();
@@ -118,6 +142,7 @@ public class Flag : MonoBehaviour
 
         if (!NetworkClient.Instance.IsConnected) return;
 
+        // Tell the server we want to pick it up
         NetworkClient.Instance.SendFlagPickup(team);
     }
 }
