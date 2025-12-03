@@ -4,13 +4,11 @@ using UnityEngine;
 public class Flag : MonoBehaviour
 {
     [Header("Flag Settings")]
-    public Team team;   // Which team OWNS this flag (Red flag, Blue flag)
+    public Team team;                // Which team this flag belongs to
+    public Transform homeOverride;   // The actual flag home position in Unity
 
-    [Tooltip("Optional: leave empty to use the flag's starting position as home.")]
-    public Transform homeOverride;
-
-    [Header("Carry Offset (if no flagHoldPoint)")]
-    public Vector3 fallbackLocalOffset = new Vector3(0f, 0f, 0.5f);
+    [Header("Carry Offset (if no hold point on remote)")]
+    public Vector3 fallbackLocalOffset = new Vector3(0, 0, 0.5f);
 
     private PlayerTeam carrier;
     private Vector3 homePos;
@@ -20,6 +18,7 @@ public class Flag : MonoBehaviour
 
     private void Awake()
     {
+        // Use override if assigned
         if (homeOverride != null)
         {
             homePos = homeOverride.position;
@@ -27,6 +26,7 @@ public class Flag : MonoBehaviour
         }
         else
         {
+            // Fallback = current position
             homePos = transform.position;
             homeRot = transform.rotation;
         }
@@ -37,8 +37,13 @@ public class Flag : MonoBehaviour
         ApplyNetworkAtBase();
     }
 
+    // ============================================================
+    // STATE SET FROM SERVER
+    // ============================================================
+
     public void ApplyNetworkAtBase()
     {
+        // Clear any carrier
         if (carrier != null)
         {
             carrier.ClearFlag(this);
@@ -59,9 +64,7 @@ public class Flag : MonoBehaviour
         }
 
         transform.SetParent(null);
-
-        // FIX: raise the drop height so it does NOT fall through ground
-        transform.position = new Vector3(pos.x, pos.y + 1.5f, pos.z);
+        transform.position = pos;
     }
 
     public void ApplyNetworkCarriedByLocal(PlayerTeam player)
@@ -69,16 +72,15 @@ public class Flag : MonoBehaviour
         carrier = player;
         carrier.AssignFlag(this);
 
-        Transform attachPoint = carrier.flagHoldPoint != null
-            ? carrier.flagHoldPoint
-            : carrier.transform;
+        Transform attach = player.flagHoldPoint != null
+            ? player.flagHoldPoint
+            : player.transform;
 
-        transform.SetParent(attachPoint, worldPositionStays: false);
+        transform.SetParent(attach, false);
 
-        if (carrier.flagHoldPoint != null)
-            transform.localPosition = Vector3.zero;
-        else
-            transform.localPosition = fallbackLocalOffset;
+        transform.localPosition = player.flagHoldPoint != null
+            ? Vector3.zero
+            : fallbackLocalOffset;
 
         transform.localRotation = Quaternion.identity;
     }
@@ -91,39 +93,22 @@ public class Flag : MonoBehaviour
             carrier = null;
         }
 
-        transform.SetParent(remoteHoldPoint, worldPositionStays: false);
+        transform.SetParent(remoteHoldPoint, false);
         transform.localPosition = Vector3.zero;
         transform.localRotation = Quaternion.identity;
     }
 
-    public bool AtHome()
-    {
-        if (IsCarried) return false;
-        return Vector3.Distance(transform.position, homePos) < 0.5f;
-    }
+    // ============================================================
+    // LOCAL PICKUP
+    // ============================================================
 
     private void OnTriggerEnter(Collider other)
     {
-        // Only local player should send pickup messages
         PlayerTeam player = other.GetComponentInParent<PlayerTeam>();
-        if (player == null || !player.isLocalPlayer)
-            return;
+        if (player == null || !player.isLocalPlayer) return;
 
-        if (NetworkClient.Instance == null || !NetworkClient.Instance.IsConnected)
-        {
-            return; // no networking; could optionally fall back to local mode
-        }
+        if (!NetworkClient.Instance.IsConnected) return;
 
-        // Ask the server to handle pickup/return
-        NetworkClient.Instance.Send($"FLAG_PICKUP {team}");
-    }
-
-    public void NetworkDropFromLocal(PlayerTeam player)
-    {
-        if (NetworkClient.Instance == null || !NetworkClient.Instance.IsConnected)
-            return;
-
-        Vector3 p = player.transform.position;
-        NetworkClient.Instance.Send($"FLAG_DROP {team} {p.x} {p.y} {p.z}");
+        NetworkClient.Instance.SendFlagPickup(team);
     }
 }
