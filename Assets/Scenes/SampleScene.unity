@@ -10814,7 +10814,7 @@ MonoBehaviour:
   serverHost: 192.168.0.12
   serverPort: 5000
   playerName: 'Player '
-  remotePlayerPrefab: {fileID: 1567040862749875820, guid: fbbed203ac9caa345a9712bce3553358, type: 3}
+  remotePlayerPrefab: {fileID: 3999761703743583687, guid: 03512f9080aaa8345ba2374e6232e39f, type: 3}
 --- !u!4 &2112473988
 Transform:
   m_ObjectHideFlags: 0
