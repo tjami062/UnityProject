@@ -35,9 +35,7 @@ public class NetworkClient : MonoBehaviour
     private readonly Dictionary<int, RemotePlayer> _remotePlayers =
         new Dictionary<int, RemotePlayer>();
 
-    // NEW: Store join messages until after welcome
     private readonly List<string[]> _pendingJoins = new List<string[]>();
-
     private bool _receivedWelcome = false;
 
     public bool IsConnected => _client != null && _client.Connected;
@@ -45,7 +43,7 @@ public class NetworkClient : MonoBehaviour
     // ============================================================
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        if (Instance != this && Instance != null)
         {
             Destroy(gameObject);
             return;
@@ -61,21 +59,19 @@ public class NetworkClient : MonoBehaviour
         ConnectToServer();
     }
 
+    private void Update()
+    {
+        while (_incomingMessages.TryDequeue(out string msg))
+            HandleServerMessage(msg);
+    }
+
     private void OnDestroy()
     {
         Disconnect();
     }
 
-    private void Update()
-    {
-        while (_incomingMessages.TryDequeue(out string msg))
-        {
-            HandleServerMessage(msg);
-        }
-    }
-
     // ============================================================
-    // Connection Logic
+    // Connection
     // ============================================================
 
     public void ConnectToServer()
@@ -85,14 +81,10 @@ public class NetworkClient : MonoBehaviour
 
     private IEnumerator ConnectRoutine()
     {
-        Debug.Log("[NC] ConnectRoutine Started");
-
         while (true)
         {
             try
             {
-                Debug.Log($"[NC] Trying {serverHost}:{serverPort}");
-
                 _client = new TcpClient();
                 _client.NoDelay = true;
                 _client.Connect(serverHost, serverPort);
@@ -102,18 +94,13 @@ public class NetworkClient : MonoBehaviour
                 _writer = new StreamWriter(ns) { AutoFlush = true };
 
                 _running = true;
-
                 _receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
                 _receiveThread.Start();
 
                 Send($"JOIN {playerName}");
-
                 yield break;
             }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[NC] Connect failed: " + ex.Message);
-            }
+            catch { }
 
             yield return new WaitForSeconds(1f);
         }
@@ -123,19 +110,15 @@ public class NetworkClient : MonoBehaviour
     {
         try
         {
-            while (_running && _client != null && _client.Connected)
+            while (_running && _client.Connected)
             {
                 string line = _reader.ReadLine();
                 if (line == null)
                     break;
-
                 _incomingMessages.Enqueue(line);
             }
         }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("[NC] ReceiveLoop: " + ex.Message);
-        }
+        catch { }
 
         _running = false;
     }
@@ -153,12 +136,13 @@ public class NetworkClient : MonoBehaviour
     public void Disconnect()
     {
         _running = false;
+
         try { _client?.Close(); } catch { }
         _client = null;
     }
 
     // ============================================================
-    // Outgoing Gameplay Messages
+    // Outgoing Gameplay
     // ============================================================
 
     public void SendPosition(Vector3 pos, Vector3 euler)
@@ -167,28 +151,26 @@ public class NetworkClient : MonoBehaviour
         Send($"POS {pos.x} {pos.y} {pos.z} {euler.y} {euler.x}");
     }
 
-    public void SendFlagPickup(Team flagTeam) =>
-        Send($"FLAG_PICKUP {flagTeam}");
+    public void SendFlagPickup(Team t) =>
+        Send($"FLAG_PICKUP {t}");
 
-    public void SendFlagDrop(Team flagTeam, Vector3 pos) =>
-        Send($"FLAG_DROP {flagTeam} {pos.x} {pos.y} {pos.z}");
+    public void SendFlagDrop(Team t, Vector3 pos) =>
+        Send($"FLAG_DROP {t} {pos.x} {pos.y} {pos.z}");
 
-    public void SendFlagCapture(Team scoringTeam) =>
-        Send($"FLAG_CAPTURE {scoringTeam}");
+    public void SendFlagCapture(Team t) =>
+        Send($"FLAG_CAPTURE {t}");
 
-    public void SendPlayerHit(int targetId, int dmg, int shooter) =>
-        Send($"HIT {targetId} {dmg} {shooter}");
+    public void SendPlayerHit(int target, int dmg, int shooter) =>
+        Send($"HIT {target} {dmg} {shooter}");
 
     // ============================================================
-    // Incoming Message Handling
+    // Incoming Messages
     // ============================================================
 
     private void HandleServerMessage(string msg)
     {
         Debug.Log("[NC] ← " + msg);
-
         string[] p = msg.Split(' ');
-        if (p.Length == 0) return;
 
         switch (p[0])
         {
@@ -206,7 +188,7 @@ public class NetworkClient : MonoBehaviour
     }
 
     // ============================================================
-    // WELCOME — Set Local ID + Team
+    // Welcome Message
     // ============================================================
 
     private void HandleWelcome(string[] p)
@@ -216,27 +198,20 @@ public class NetworkClient : MonoBehaviour
         LocalPlayerId = int.Parse(p[1]);
         LocalTeam = (Team)Enum.Parse(typeof(Team), p[2]);
 
-        Debug.Log($"[NC] WELCOME → ID={LocalPlayerId}, Team={LocalTeam}");
+        var pt = FindFirstObjectByType<PlayerTeam>();
+        pt.team = LocalTeam;
+        pt.isLocalPlayer = true;
+        GameManager.Instance.SpawnPlayer(pt);
 
-        // Spawn local player
-        var player = FindFirstObjectByType<PlayerTeam>();
-        if (player != null)
-        {
-            player.team = LocalTeam;
-            player.isLocalPlayer = true;
-            GameManager.Instance.SpawnPlayer(player);
-        }
-
-        // Process queued joins
+        // Spawn any remote players received before welcome
         foreach (var join in _pendingJoins)
-        {
             SpawnRemote(join);
-        }
+
         _pendingJoins.Clear();
     }
 
     // ============================================================
-    // Player Spawn Logic
+    // Remote Player Handling
     // ============================================================
 
     private void HandlePlayerJoined(string[] p)
@@ -255,15 +230,10 @@ public class NetworkClient : MonoBehaviour
         int id = int.Parse(p[1]);
         Team t = (Team)Enum.Parse(typeof(Team), p[2]);
 
-        if (id == LocalPlayerId)
+        if (id == LocalPlayerId || _remotePlayers.ContainsKey(id))
             return;
 
-        if (_remotePlayers.ContainsKey(id))
-            return;
-
-        Debug.Log($"[NC] Spawning remote {id} ({t})");
-
-        GameObject obj = Instantiate(remotePlayerPrefab, Vector3.zero, Quaternion.identity);
+        GameObject obj = Instantiate(remotePlayerPrefab);
         RemotePlayer rp = obj.GetComponent<RemotePlayer>();
         rp.playerId = id;
         rp.team = t;
@@ -284,79 +254,83 @@ public class NetworkClient : MonoBehaviour
     private void HandlePos(string[] p)
     {
         int id = int.Parse(p[1]);
-        if (id == LocalPlayerId) return;
-
         if (_remotePlayers.TryGetValue(id, out RemotePlayer rp))
         {
-            float x = float.Parse(p[2]);
-            float y = float.Parse(p[3]);
-            float z = float.Parse(p[4]);
-            float ry = float.Parse(p[5]);
-
-            rp.SetNetworkState(new Vector3(x, y, z), ry);
+            rp.SetNetworkState(
+                new Vector3(float.Parse(p[2]), float.Parse(p[3]), float.Parse(p[4])),
+                float.Parse(p[5])
+            );
         }
     }
 
     // ============================================================
-    // Flags / Score / Death
+    // FLAG_STATE FIXED
     // ============================================================
 
     private void HandleFlagState(string[] p)
     {
-        Team ft = (Team)Enum.Parse(typeof(Team), p[1]);
+        Team flagTeam = (Team)Enum.Parse(typeof(Team), p[1]);
         string state = p[2];
-        int carrier = int.Parse(p[3]);
+        int carrierId = int.Parse(p[3]);
 
-        float x = float.Parse(p[4]);
-        float y = float.Parse(p[5]);
-        float z = float.Parse(p[6]);
+        Flag flag = GameManager.Instance.GetFlagForTeam(flagTeam);
+        if (flag == null) return;
 
-        Flag f = GameManager.Instance?.GetFlagForTeam(ft);
-        if (f == null) return;
-
-        switch (state)
+        // AT_BASE (no coordinates)
+        if (state == "AT_BASE")
         {
-            case "AT_BASE":
-                // Do NOT use server coordinates — always use Unity-defined homeOverride
-                f.ApplyNetworkAtBase();
-                return;
+            flag.ApplyNetworkAtBase();
+            return;
+        }
 
-            case "CARRIED":
-                if (carrier == LocalPlayerId)
-                {
-                    f.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
-                }
-                else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
-                {
-                    rp.AttachCarriedFlag(f);
-                }
-                break;
+        // CARRIED (no coordinates)
+        if (state == "CARRIED")
+        {
+            if (carrierId == LocalPlayerId)
+            {
+                flag.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
+            }
+            else if (_remotePlayers.TryGetValue(carrierId, out RemotePlayer rp))
+            {
+                rp.AttachCarriedFlag(flag);
+            }
+            return;
+        }
 
-            case "DROPPED":
-                f.ApplyNetworkDropped(new Vector3(x, y, z));
-                break;
+        // DROPPED (safe because DROPPED always includes x y z)
+        if (state == "DROPPED")
+        {
+            float x = float.Parse(p[4]);
+            float y = float.Parse(p[5]);
+            float z = float.Parse(p[6]);
+            flag.ApplyNetworkDropped(new Vector3(x, y, z));
         }
     }
 
+    // ============================================================
+    // Score & Match Events
+    // ============================================================
+
     private void HandleScore(string[] p)
     {
-        GameManager.Instance?.SetScoreFromServer(int.Parse(p[1]), int.Parse(p[2]));
+        GameManager.Instance.SetScoreFromServer(int.Parse(p[1]), int.Parse(p[2]));
     }
 
     private void HandleGameOver(string[] p)
     {
         MatchOver = true;
-        GameUIManager.Instance?.ShowGameOver((Team)Enum.Parse(typeof(Team), p[1]));
+        GameUIManager.Instance.ShowGameOver(
+            (Team)Enum.Parse(typeof(Team), p[1])
+        );
     }
 
     private void HandleMatchReset(string[] p)
     {
         MatchOver = false;
-        GameUIManager.Instance?.HideGameOver();
+        GameUIManager.Instance.HideGameOver();
 
         var pt = FindFirstObjectByType<PlayerTeam>();
-        if (pt != null)
-            GameManager.Instance.SpawnPlayer(pt);
+        GameManager.Instance.SpawnPlayer(pt);
     }
 
     private void HandlePlayerHit(string[] p)
@@ -369,7 +343,7 @@ public class NetworkClient : MonoBehaviour
             FindFirstObjectByType<Health>()?.ApplyNetworkDamage(dmg, shooter);
 
         if (shooter == LocalPlayerId)
-            HitMarkerUI.Instance?.ShowHitMarker();
+            HitMarkerUI.Instance.ShowHitMarker();
     }
 
     private void HandlePlayerDead(string[] p)
