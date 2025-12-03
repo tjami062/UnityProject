@@ -56,36 +56,31 @@ public class Health : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        // Inform server of death (killfeed etc)
+        // --- FIX: FORCE DROP FLAG ON DEATH ---
+        if (playerTeam != null && playerTeam.carriedFlag != null)
+        {
+            Flag f = playerTeam.carriedFlag;
+
+            // Clear on player
+            playerTeam.ClearFlag();
+
+            // Return flag home (no scoring)
+            f.ApplyNetworkAtBase();
+
+            // Inform server that flag is no longer carried
+            NetworkClient.Instance.Send($"FLAG_DROP {f.team} 0 0 0");
+        }
+
+        // Inform server that we died (for kill feed etc.)
         if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
         {
             int myId = NetworkClient.Instance.LocalPlayerId;
             NetworkClient.Instance.Send($"PLAYER_DEAD {myId} {lastAttackerId}");
         }
 
-        // -------------------------------
-        // RETURN FLAG TO BASE ON DEATH
-        // -------------------------------
-        if (playerTeam != null && playerTeam.HasFlag && playerTeam.carriedFlag != null)
-        {
-            Flag flag = playerTeam.carriedFlag;
-
-            // Clear flag from player
-            playerTeam.ClearFlag();
-
-            // Tell server: treat this as touching own base → return flag
-            if (NetworkClient.Instance != null && NetworkClient.Instance.IsConnected)
-            {
-                NetworkClient.Instance.Send($"FLAG_PICKUP {flag.team}");
-            }
-
-            // Immediately update client-side visuals
-            flag.ApplyNetworkAtBase();
-        }
-
         ShowDeathMessage();
 
-        // Respawn player
+        // Respawn after short delay
         StartCoroutine(RespawnAfterDelay(3f));
     }
 
