@@ -43,17 +43,26 @@ public class Flag : MonoBehaviour
 
     public void ApplyNetworkAtBase()
     {
-        // Clear any carrier
+        // Ensure no old parenting keeps wrong offset
+        transform.SetParent(null);
+
+        // Force home position ALWAYS
+        transform.position = homePos;
+        transform.rotation = homeRot;
+
+        // Ensure no carrier reference stays
         if (carrier != null)
         {
             carrier.ClearFlag(this);
             carrier = null;
         }
 
-        transform.SetParent(null);
-        transform.position = homePos;
-        transform.rotation = homeRot;
+        // FORCE Y FIX
+        Vector3 p = transform.position;
+        p.y = homePos.y;
+        transform.position = p;
     }
+
 
     public void ApplyNetworkDropped(Vector3 pos)
     {

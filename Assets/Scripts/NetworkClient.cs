@@ -316,7 +316,10 @@ public class NetworkClient : MonoBehaviour
 
         switch (state)
         {
-            case "AT_BASE": f.ApplyNetworkAtBase(); break;
+            case "AT_BASE":
+                // Do NOT use server coordinates — always use Unity-defined homeOverride
+                f.ApplyNetworkAtBase();
+                return;
 
             case "CARRIED":
                 if (carrier == LocalPlayerId)
