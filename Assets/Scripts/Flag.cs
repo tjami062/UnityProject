@@ -59,7 +59,9 @@ public class Flag : MonoBehaviour
         }
 
         transform.SetParent(null);
-        transform.position = pos;
+
+        // FIX: raise the drop height so it does NOT fall through ground
+        transform.position = new Vector3(pos.x, pos.y + 1.5f, pos.z);
     }
 
     public void ApplyNetworkCarriedByLocal(PlayerTeam player)
