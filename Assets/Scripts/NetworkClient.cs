@@ -35,7 +35,9 @@ public class NetworkClient : MonoBehaviour
     private readonly Dictionary<int, RemotePlayer> _remotePlayers =
         new Dictionary<int, RemotePlayer>();
 
-    // Prevents premature spawning
+    // NEW: Store join messages until after welcome
+    private readonly List<string[]> _pendingJoins = new List<string[]>();
+
     private bool _receivedWelcome = false;
 
     public bool IsConnected => _client != null && _client.Connected;
@@ -113,7 +115,6 @@ public class NetworkClient : MonoBehaviour
                 Debug.LogWarning("[NC] Connect failed: " + ex.Message);
             }
 
-            // LEGAL — after catch
             yield return new WaitForSeconds(1f);
         }
     }
@@ -166,25 +167,17 @@ public class NetworkClient : MonoBehaviour
         Send($"POS {pos.x} {pos.y} {pos.z} {euler.y} {euler.x}");
     }
 
-    public void SendFlagPickup(Team flagTeam)
-    {
+    public void SendFlagPickup(Team flagTeam) =>
         Send($"FLAG_PICKUP {flagTeam}");
-    }
 
-    public void SendFlagDrop(Team flagTeam, Vector3 pos)
-    {
+    public void SendFlagDrop(Team flagTeam, Vector3 pos) =>
         Send($"FLAG_DROP {flagTeam} {pos.x} {pos.y} {pos.z}");
-    }
 
-    public void SendFlagCapture(Team scoringTeam)
-    {
+    public void SendFlagCapture(Team scoringTeam) =>
         Send($"FLAG_CAPTURE {scoringTeam}");
-    }
 
-    public void SendPlayerHit(int targetId, int dmg, int shooter)
-    {
+    public void SendPlayerHit(int targetId, int dmg, int shooter) =>
         Send($"HIT {targetId} {dmg} {shooter}");
-    }
 
     // ============================================================
     // Incoming Message Handling
@@ -225,6 +218,7 @@ public class NetworkClient : MonoBehaviour
 
         Debug.Log($"[NC] WELCOME → ID={LocalPlayerId}, Team={LocalTeam}");
 
+        // Spawn local player
         var player = FindFirstObjectByType<PlayerTeam>();
         if (player != null)
         {
@@ -232,6 +226,13 @@ public class NetworkClient : MonoBehaviour
             player.isLocalPlayer = true;
             GameManager.Instance.SpawnPlayer(player);
         }
+
+        // Process queued joins
+        foreach (var join in _pendingJoins)
+        {
+            SpawnRemote(join);
+        }
+        _pendingJoins.Clear();
     }
 
     // ============================================================
@@ -240,8 +241,17 @@ public class NetworkClient : MonoBehaviour
 
     private void HandlePlayerJoined(string[] p)
     {
-        if (!_receivedWelcome) return; // <-- CRITICAL FIX
+        if (!_receivedWelcome)
+        {
+            _pendingJoins.Add(p);
+            return;
+        }
 
+        SpawnRemote(p);
+    }
+
+    private void SpawnRemote(string[] p)
+    {
         int id = int.Parse(p[1]);
         Team t = (Team)Enum.Parse(typeof(Team), p[2]);
 
