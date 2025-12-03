@@ -7,7 +7,7 @@ public class RemotePlayer : MonoBehaviour
     public Team team;
 
     [Header("Visual")]
-    public Renderer playerRenderer;
+    public MeshRenderer body;
     public Material redMaterial;
     public Material blueMaterial;
 
@@ -15,53 +15,57 @@ public class RemotePlayer : MonoBehaviour
     public float positionLerpSpeed = 15f;
     public float rotationLerpSpeed = 15f;
 
-    private Vector3 targetPos;
-    private float targetRotY;
-
     [Header("Flag Attachment")]
-    public Transform flagHoldPoint; // ← Set this in the prefab
+    public Transform flagHoldPoint;
+
+    private Vector3 targetPos;
+    private float targetYRot;
 
     private Flag carriedFlag;
 
     private void Start()
     {
-        if (playerRenderer != null)
-        {
-            playerRenderer.material = (team == Team.Red) ? redMaterial : blueMaterial;
-        }
+        // set player color
+        if (body != null)
+            body.material = (team == Team.Red ? redMaterial : blueMaterial);
     }
 
     private void Update()
     {
         transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * positionLerpSpeed);
 
-        Quaternion targetRot = Quaternion.Euler(0, targetRotY, 0);
+        Quaternion targetRot = Quaternion.Euler(0, targetYRot, 0);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * rotationLerpSpeed);
     }
 
-    public void SetNetworkState(Vector3 pos, float rotY)
+    // ============================================================
+    // Set network state
+    // ============================================================
+    public void SetNetworkState(Vector3 pos, float yRotation)
     {
         targetPos = pos;
-        targetRotY = rotY;
+        targetYRot = yRotation;
     }
 
-    // Called by NetworkClient.HandleFlagState()
+    // ============================================================
+    // FLAG ATTACH
+    // ============================================================
     public void AttachCarriedFlag(Flag flag)
     {
         carriedFlag = flag;
 
-        Transform attachPoint = flagHoldPoint != null ? flagHoldPoint : transform;
+        Debug.Log($"[REMOTE] Player {playerId} now carrying {flag.team}");
 
-        flag.transform.SetParent(attachPoint, false);
+        Transform attach = flagHoldPoint != null ? flagHoldPoint : transform;
+
+        flag.transform.SetParent(attach, false);
         flag.transform.localPosition = Vector3.zero;
         flag.transform.localRotation = Quaternion.identity;
     }
 
-    public void DropFlag()
+    public void ClearFlag(Flag flag)
     {
-        if (carriedFlag != null)
-        {
+        if (carriedFlag == flag)
             carriedFlag = null;
-        }
     }
 }

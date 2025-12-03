@@ -269,45 +269,37 @@ public class NetworkClient : MonoBehaviour
 
     private void HandleFlagState(string[] p)
     {
-        Team flagTeam = (Team)Enum.Parse(typeof(Team), p[1]);
+        Team ft = (Team)Enum.Parse(typeof(Team), p[1]);
         string state = p[2];
         int carrier = int.Parse(p[3]);
 
-        Flag flag = GameManager.Instance?.GetFlagForTeam(flagTeam);
-        if (flag == null) return;
+        Flag f = GameManager.Instance?.GetFlagForTeam(ft);
+        if (f == null) return;
 
-        // CASE 1: AT BASE — NEVER read coordinates, never use 0,0,0
-        if (state == "AT_BASE")
+        // =============================
+        // FORCE FLAG TO RETURN HOME
+        // unless state == CARRIED
+        // =============================
+        if (state != "CARRIED")
         {
-            flag.ApplyNetworkAtBase();
+            // ALWAYS return home, ignore server coordinates
+            f.ApplyNetworkAtBase();
             return;
         }
 
-        // CASE 2: CARRIED — ignore coordinates
-        if (state == "CARRIED")
+        // =============================
+        // CARRIED STATE
+        // =============================
+        if (carrier == LocalPlayerId)
         {
-            if (carrier == LocalPlayerId)
-            {
-                flag.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
-            }
-            else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
-            {
-                rp.AttachCarriedFlag(flag);
-            }
-            return;
+            f.ApplyNetworkCarriedByLocal(FindFirstObjectByType<PlayerTeam>());
         }
-
-        // CASE 3: DROPPED — NOW read coordinates
-        if (state == "DROPPED")
+        else if (_remotePlayers.TryGetValue(carrier, out RemotePlayer rp))
         {
-            float x = float.Parse(p[4]);
-            float y = float.Parse(p[5]);
-            float z = float.Parse(p[6]);
-
-            flag.ApplyNetworkDropped(new Vector3(x, y, z));
-            return;
+            rp.AttachCarriedFlag(f);
         }
     }
+
 
     // ============================================================
     // Score & Match Events
