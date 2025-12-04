@@ -7,7 +7,8 @@ Step 4: Confirm server running with command prompt window stating "Waiting for c
 
 Step 5: Run FPS.exe from the downloaded build   
 <img width="786" height="292" alt="image" src="https://github.com/user-attachments/assets/134b2427-3776-4eaf-95ff-26c14c52640b" />
-Step 6: Have fun!   
+Step 6: Have fun!  
+
 <img width="1468" height="721" alt="image" src="https://github.com/user-attachments/assets/de8dd7ad-82d0-4a91-a4b7-dac8c1938f9a" />
 
 
